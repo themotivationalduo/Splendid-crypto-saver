@@ -4,7 +4,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuthVault } from '../context/AuthVaultContext';
 import { encryptData } from '../utils/crypto';
-import { PlusCircle, Wallet, Key, Layers, ShieldCheck, Wand2, Settings2, RefreshCw } from 'lucide-react';
+import { PlusCircle, Wallet, Key, Layers, ShieldCheck, Wand2, Settings2, RefreshCw, Tag } from 'lucide-react';
 
 export function AddEntry() {
   const { user, cryptoKey } = useAuthVault();
@@ -12,6 +12,7 @@ export function AddEntry() {
   
   const [label, setLabel] = useState('');
   const [chain, setChain] = useState('Ethereum');
+  const [category, setCategory] = useState('Wallet');
   const [publicAddress, setPublicAddress] = useState('');
   const [secret, setSecret] = useState('');
   
@@ -27,6 +28,7 @@ export function AddEntry() {
   const [genSymbols, setGenSymbols] = useState(false);
 
   const CHAINS = ['Ethereum', 'Bitcoin', 'Solana', 'BNB Chain', 'Polygon', 'Arbitrum', 'Optimism', 'Other'];
+  const CATEGORIES = ['Wallet', 'Exchange', 'DeFi', 'Social', 'Seed Phrase', 'Other'];
 
   const generateSecret = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -75,6 +77,7 @@ export function AddEntry() {
       await addDoc(collection(db, 'users', user.uid, 'vault'), {
         label,
         chain,
+        category,
         publicAddress,
         encryptedSecret: ciphertext,
         iv,
@@ -116,21 +119,21 @@ export function AddEntry() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1">
-                <Layers size={14} /> Label / Title
-              </label>
-              <input
-                type="text"
-                required
-                value={label}
-                onChange={e => setLabel(e.target.value)}
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
-                placeholder="e.g. MetaMask Main Wallet"
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1">
+              <Layers size={14} /> Label / Title
+            </label>
+            <input
+              type="text"
+              required
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              placeholder="e.g. MetaMask Main Wallet"
+            />
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">
                 Blockchain Network
@@ -141,6 +144,19 @@ export function AddEntry() {
                 className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all appearance-none"
               >
                 {CHAINS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1">
+                <Tag size={14} /> Category
+              </label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all appearance-none"
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>

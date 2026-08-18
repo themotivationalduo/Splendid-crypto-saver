@@ -3,7 +3,7 @@ import { useAuthVault } from '../context/AuthVaultContext';
 import { Settings as SettingsIcon, UserCircle, Shield, Clock, Hash, CheckCircle2 } from 'lucide-react';
 
 export function Settings() {
-  const { user, salt, lockVault, signOut } = useAuthVault();
+  const { user, salt, lockVault, signOut, timeoutMinutes, setTimeoutMinutes } = useAuthVault();
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -70,12 +70,19 @@ export function Settings() {
 
             <div>
               <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                <Clock size={12} /> Session Lock
+                <Clock size={12} /> Session Auto-Lock
               </label>
-              <div className="text-slate-300 mt-1 text-sm flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-500" />
-                Auto-locks after 5 minutes of inactivity
-              </div>
+              <select
+                value={timeoutMinutes}
+                onChange={(e) => setTimeoutMinutes(parseInt(e.target.value, 10))}
+                className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 transition-all appearance-none cursor-pointer"
+              >
+                <option value={1}>1 Minute (Strict)</option>
+                <option value={5}>5 Minutes (Default)</option>
+                <option value={15}>15 Minutes</option>
+                <option value={60}>1 Hour</option>
+                <option value={0}>Never Lock (Not Recommended)</option>
+              </select>
             </div>
           </div>
         </div>

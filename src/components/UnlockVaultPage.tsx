@@ -3,11 +3,27 @@ import { useAuthVault } from '../context/AuthVaultContext';
 import { KeyRound, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 export function UnlockVaultPage() {
-  const { hasSalt, setInitialSalt, unlockVault, signOut } = useAuthVault();
+  const { user, hasSalt, isPasswordOptional, setInitialSalt, unlockVault, signOut } = useAuthVault();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const runWithTimeout = async (operation: () => Promise<void>) => {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("Processing timeout after 2 minutes. Your device may be struggling with the encryption workload. Please try resetting your vault or using the Optional Password mode."));
+      }, 120000); // 2 minutes
+
+      operation().then(() => {
+        clearTimeout(timer);
+        resolve();
+      }).catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,22 +31,45 @@ export function UnlockVaultPage() {
     setLoading(true);
 
     try {
-      if (!hasSalt) {
-        if (password !== confirmPassword) {
-          throw new Error('Passwords do not match');
+      await runWithTimeout(async () => {
+        if (!hasSalt) {
+          if (password !== confirmPassword) {
+            throw new Error('Passwords do not match');
+          }
+          if (password.length < 8) {
+            throw new Error('Master password must be at least 8 characters');
+          }
+          await setInitialSalt(password, false);
+        } else {
+          // If the password is optional, they shouldn't even be submitting this form usually,
+          // but if they do, we use their user UID as the hidden derived password key.
+          if (isPasswordOptional) {
+            await unlockVault(user!.uid);
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 50));
+            await unlockVault(password);
+          }
         }
-        if (password.length < 8) {
-          throw new Error('Master password must be at least 8 characters');
-        }
-        await setInitialSalt(password);
-      } else {
-        // We use a small timeout to let the UI update to "Processing..." before the heavy crypto operation blocks the thread
-        await new Promise(resolve => setTimeout(resolve, 50));
-        await unlockVault(password);
-      }
+      });
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Operation failed. If you recently created your vault, your device might be incompatible with the previous iteration count. Please reset your vault.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkipPassword = async () => {
+    if (!user) return;
+    setError('');
+    setLoading(true);
+    try {
+      await runWithTimeout(async () => {
+        // Use their UID as the invisible fallback password
+        await setInitialSalt(user.uid, true);
+      });
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -56,20 +95,24 @@ export function UnlockVaultPage() {
             <KeyRound className="text-cyan-400 w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold text-white">
-            {hasSalt ? 'Unlock Your Vault' : 'Setup Master Password'}
+            {hasSalt 
+              ? (isPasswordOptional ? 'Enter Your Vault' : 'Unlock Your Vault') 
+              : 'Setup Master Password'}
           </h2>
           <p className="text-slate-400 mt-2 text-sm max-w-sm">
             {hasSalt 
-              ? 'Enter your Master Password to derive your zero-knowledge encryption key.'
-              : 'Create a strong Master Password. This is used to derive your local encryption key. We NEVER store this password.'}
+              ? (isPasswordOptional 
+                  ? 'Your vault is protected by an invisible local device key.'
+                  : 'Enter your Master Password to derive your zero-knowledge encryption key.')
+              : 'Create a strong Master Password to protect your secrets. If you prefer convenience, you can skip this.'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex gap-2 items-center">
-              <ShieldAlert size={16} />
-              {error}
+              <ShieldAlert className="shrink-0" size={16} />
+              <span>{error}</span>
             </div>
           )}
 
@@ -79,39 +122,43 @@ export function UnlockVaultPage() {
                 <CheckCircle2 size={16} /> Zero-Knowledge Architecture
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                If you lose this Master Password, your crypto secrets cannot be recovered. It is not sent to our servers.
+                If you use a password, your secrets cannot be recovered if you forget it. It is never sent to our servers.
               </p>
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">
-              Master Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
-              placeholder="••••••••••••"
-            />
-          </div>
+          {(!hasSalt || !isPasswordOptional) && (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">
+                  Master Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
+                  placeholder="••••••••••••"
+                />
+              </div>
 
-          {!hasSalt && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">
-                Confirm Master Password
-              </label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
-                placeholder="••••••••••••"
-              />
-            </div>
+              {!hasSalt && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">
+                    Confirm Master Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 px-4 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
+                    placeholder="••••••••••••"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           <button
@@ -122,6 +169,19 @@ export function UnlockVaultPage() {
             {loading ? 'Processing...' : (hasSalt ? 'Decrypt & Unlock' : 'Initialize Vault')}
           </button>
         </form>
+
+        {!hasSalt && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={handleSkipPassword}
+              disabled={loading}
+              type="button"
+              className="text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors underline"
+            >
+              Skip Password Setup (Less Secure)
+            </button>
+          </div>
+        )}
 
         {hasSalt && error && (
           <div className="mt-4 text-center">

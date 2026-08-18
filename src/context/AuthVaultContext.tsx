@@ -14,7 +14,10 @@ interface AuthVaultContextType {
   lockVault: () => void;
   signOut: () => Promise<void>;
   hasSalt: boolean;
-  setInitialSalt: (password: string) => Promise<void>;
+  isPasswordOptional: boolean;
+  setInitialSalt: (password: string, isOptional?: boolean) => Promise<void>;
+  timeoutMinutes: number;
+  setTimeoutMinutes: (min: number) => void;
 }
 
 const AuthVaultContext = createContext<AuthVaultContextType | undefined>(undefined);
@@ -26,17 +29,32 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasSalt, setHasSalt] = useState(false);
+  const [isPasswordOptional, setIsPasswordOptional] = useState(false);
+  const [timeoutMinutes, setTimeoutMinutesState] = useState<number>(() => {
+    const saved = localStorage.getItem('sscs_timeout');
+    return saved ? parseInt(saved, 10) : 5;
+  });
 
   const lockTimer = useRef<number | null>(null);
 
+  const setTimeoutMinutes = (min: number) => {
+    localStorage.setItem('sscs_timeout', min.toString());
+    setTimeoutMinutesState(min);
+  };
+
   const resetTimer = () => {
     if (lockTimer.current) window.clearTimeout(lockTimer.current);
-    if (cryptoKey) {
+    if (cryptoKey && timeoutMinutes > 0) {
       lockTimer.current = window.setTimeout(() => {
         lockVault();
-      }, 5 * 60 * 1000); // 5 minutes inactivity lock
+      }, timeoutMinutes * 60 * 1000);
     }
   };
+
+  // Re-run resetTimer whenever timeoutMinutes changes
+  useEffect(() => {
+    resetTimer();
+  }, [timeoutMinutes, cryptoKey]);
 
   useEffect(() => {
     const handleActivity = () => resetTimer();
@@ -72,12 +90,27 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
             
             if (userDoc.exists() && userDoc.data().salt) {
               const fetchedSalt = userDoc.data().salt;
+              const optional = userDoc.data().isPasswordOptional === true;
+              
               setSalt(fetchedSalt);
               setHasSalt(true);
+              setIsPasswordOptional(optional);
               localStorage.setItem(localSaltKey, fetchedSalt);
+              localStorage.setItem(`${localSaltKey}_optional`, optional ? 'true' : 'false');
+              
+              // If optional, we immediately derive the key so they don't see the unlock screen
+              if (optional) {
+                 try {
+                    const key = await deriveKey(u.uid, fetchedSalt);
+                    setCryptoKey(key);
+                 } catch(e) {
+                    console.error("Auto-unlock failed", e);
+                 }
+              }
             } else {
               setSalt(null);
               setHasSalt(false);
+              setIsPasswordOptional(false);
             }
             success = true;
             setError(null);
@@ -86,23 +119,34 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
             
             // Fallback to local storage if available
             const cachedSalt = localStorage.getItem(localSaltKey);
+            const cachedOptional = localStorage.getItem(`${localSaltKey}_optional`) === 'true';
+            
             if (cachedSalt) {
               console.log("Using cached salt from localStorage due to network error.");
               setSalt(cachedSalt);
               setHasSalt(true);
+              setIsPasswordOptional(cachedOptional);
               success = true;
               setError(null);
+              
+              if (cachedOptional) {
+                 try {
+                    const key = await deriveKey(u.uid, cachedSalt);
+                    setCryptoKey(key);
+                 } catch(e) {}
+              }
               break;
             }
             
-            // If it's an offline error, wait and retry.
-            if (err.message && err.message.toLowerCase().includes('offline')) {
+            // If it's an offline or closing error, wait and retry.
+            const errorMsg = (err.message || "").toLowerCase();
+            if (errorMsg.includes('offline') || errorMsg.includes('closing') || errorMsg.includes('hidden')) {
               retries -= 1;
               if (retries > 0) {
                 await new Promise(resolve => setTimeout(resolve, 1500));
               } else {
                 if (isMounted) {
-                  setError("Offline Error: Your browser is blocking the database connection. Please open the app in a new tab (top right corner) to allow Firebase to connect securely.");
+                  setError("Browser Security Block: Your browser is preventing the database connection inside this preview window. Please click the 'Open in new tab' icon in the top right to continue.");
                 }
               }
             } else {
@@ -116,6 +160,7 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
       } else {
         setSalt(null);
         setHasSalt(false);
+        setIsPasswordOptional(false);
         setCryptoKey(null);
       }
       
@@ -130,18 +175,21 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const setInitialSalt = async (password: string) => {
+  const setInitialSalt = async (password: string, isOptional: boolean = false) => {
     if (!user) return;
     const newSalt = generateSalt();
     const localSaltKey = `sscs_salt_${user.uid}`;
     
     // Save locally immediately to avoid offline blocking
     localStorage.setItem(localSaltKey, newSalt);
+    localStorage.setItem(`${localSaltKey}_optional`, isOptional ? 'true' : 'false');
+    
     setSalt(newSalt);
     setHasSalt(true);
+    setIsPasswordOptional(isOptional);
 
     try {
-      await setDoc(doc(db, 'users', user.uid), { salt: newSalt }, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), { salt: newSalt, isPasswordOptional: isOptional }, { merge: true });
     } catch (e) {
       console.warn("Failed to sync salt to Firebase immediately. It is saved in localStorage.", e);
     }
@@ -169,7 +217,7 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthVaultContext.Provider value={{ user, cryptoKey, salt, loading, error, unlockVault, lockVault, signOut, hasSalt, setInitialSalt }}>
+    <AuthVaultContext.Provider value={{ user, cryptoKey, salt, loading, error, unlockVault, lockVault, signOut, hasSalt, isPasswordOptional, setInitialSalt, timeoutMinutes, setTimeoutMinutes }}>
       {children}
     </AuthVaultContext.Provider>
   );

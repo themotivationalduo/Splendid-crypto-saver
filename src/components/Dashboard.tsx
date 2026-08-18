@@ -9,6 +9,7 @@ interface VaultEntry {
   id: string;
   label: string;
   chain: string;
+  category?: string;
   publicAddress: string;
   encryptedSecret: string;
   iv: string;
@@ -93,7 +94,8 @@ export function Dashboard() {
   const filteredEntries = entries.filter(e => 
     e.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
     e.chain.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.publicAddress.toLowerCase().includes(searchTerm.toLowerCase())
+    e.publicAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.category && e.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -139,9 +141,16 @@ export function Dashboard() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-white">{entry.label}</h3>
-                  <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-medium tracking-wider uppercase border border-slate-700">
-                    {entry.chain}
-                  </span>
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-medium tracking-wider uppercase border border-slate-700">
+                      {entry.chain}
+                    </span>
+                    {entry.category && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-cyan-900/30 text-cyan-400 text-[10px] font-medium tracking-wider uppercase border border-cyan-800/50">
+                        {entry.category}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => handleDelete(entry.id)}
