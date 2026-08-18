@@ -24,12 +24,26 @@ export function UnlockVaultPage() {
         }
         await setInitialSalt(password);
       } else {
+        // We use a small timeout to let the UI update to "Processing..." before the heavy crypto operation blocks the thread
+        await new Promise(resolve => setTimeout(resolve, 50));
         await unlockVault(password);
       }
     } catch (err: any) {
-      setError(err.message || 'Operation failed');
+      console.error(err);
+      setError(err.message || 'Operation failed. If you recently created your vault, your device might be incompatible with the previous iteration count. Please reset your vault.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetVault = async () => {
+    if (window.confirm("Are you ABSOLUTELY sure? This will delete your salt and lock you out of all existing encrypted data. You will need to start over.")) {
+      try {
+        await setInitialSalt(password || "default-reset-pass");
+        window.location.reload();
+      } catch (e) {
+        alert("Failed to reset vault.");
+      }
     }
   };
 
@@ -103,11 +117,22 @@ export function UnlockVaultPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] mt-4"
+            className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] mt-4 disabled:opacity-70 disabled:cursor-wait"
           >
             {loading ? 'Processing...' : (hasSalt ? 'Decrypt & Unlock' : 'Initialize Vault')}
           </button>
         </form>
+
+        {hasSalt && error && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={handleResetVault}
+              className="text-xs text-red-400 hover:text-red-300 transition-colors underline"
+            >
+              Emergency: Reset Vault (Destructive)
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 text-center border-t border-slate-800/50 pt-4">
           <button

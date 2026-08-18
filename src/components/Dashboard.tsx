@@ -25,6 +25,19 @@ export function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
+    
+    // Load cached vault entries to prevent blank screens offline
+    const localVaultKey = `sscs_vault_${user.uid}`;
+    const cachedVault = localStorage.getItem(localVaultKey);
+    if (cachedVault) {
+      try {
+        setEntries(JSON.parse(cachedVault));
+        setLoading(false);
+      } catch (e) {
+        console.error("Failed to parse cached vault");
+      }
+    }
+
     const q = query(collection(db, 'users', user.uid, 'vault'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: VaultEntry[] = [];
@@ -32,6 +45,7 @@ export function Dashboard() {
         data.push({ id: doc.id, ...doc.data() } as VaultEntry);
       });
       setEntries(data);
+      localStorage.setItem(localVaultKey, JSON.stringify(data));
       setLoading(false);
     }, (error) => {
       console.error("Error fetching vault entries:", error);

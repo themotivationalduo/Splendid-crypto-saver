@@ -1,4 +1,4 @@
-export const ITERATIONS = 600000;
+export const ITERATIONS = 100000;
 export const HASH_ALGO = "SHA-256";
 export const AES_ALGO = "AES-GCM";
 
