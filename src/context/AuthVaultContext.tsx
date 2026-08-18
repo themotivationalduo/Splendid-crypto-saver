@@ -79,7 +79,7 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       
       if (u) {
-        let retries = 3;
+        let retries = 2;
         let success = false;
         const localSaltKey = `sscs_salt_${u.uid}`;
         
@@ -115,7 +115,8 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
             success = true;
             setError(null);
           } catch (err: any) {
-            console.error(`Error fetching user salt (${retries} retries left):`, err);
+            // Suppress the scary console log to a warning so users don't panic
+            console.warn(`Connection issue (${retries} retries left):`, err.message);
             
             // Fallback to local storage if available
             const cachedSalt = localStorage.getItem(localSaltKey);
@@ -143,7 +144,7 @@ export function AuthVaultProvider({ children }: { children: React.ReactNode }) {
             if (errorMsg.includes('offline') || errorMsg.includes('closing') || errorMsg.includes('hidden')) {
               retries -= 1;
               if (retries > 0) {
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                await new Promise(resolve => setTimeout(resolve, 500)); // Fast retry
               } else {
                 if (isMounted) {
                   setError("Browser Security Block: Your browser is preventing the database connection inside this preview window. Please click the 'Open in new tab' icon in the top right to continue.");
