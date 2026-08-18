@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuthVault } from './context/AuthVaultContext';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
@@ -8,9 +9,33 @@ import { AddEntry } from './components/AddEntry';
 import { Backups } from './components/Backups';
 import { Settings } from './components/Settings';
 
-export default function App() {
+function ProtectedLayout() {
+  const { user, cryptoKey } = useAuthVault();
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!cryptoKey) {
+    return <Navigate to="/unlock" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-emerald-500/30 font-sans relative overflow-hidden">
+      {/* Background Ambience Blobs */}
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-900/20 blur-[120px] rounded-full pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none" />
+
+      <Navbar />
+      
+      <main className="pt-24 pb-20 sm:pb-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+function AppRoutes() {
   const { user, cryptoKey, loading, error, signOut } = useAuthVault();
-  const [activeTab, setActiveTab] = useState('dashboard');
 
   if (loading) {
     return (
@@ -48,28 +73,37 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return <AuthPage />;
-  }
-
-  if (!cryptoKey) {
-    return <UnlockVaultPage />;
-  }
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-emerald-500/30 font-sans relative overflow-hidden">
-      {/* Background Ambience Blobs */}
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-900/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none" />
+    <Routes>
+      {/* Public / Semi-Public */}
+      <Route 
+        path="/login" 
+        element={user ? (cryptoKey ? <Navigate to="/dashboard" replace /> : <Navigate to="/unlock" replace />) : <AuthPage />} 
+      />
+      <Route 
+        path="/unlock" 
+        element={!user ? <Navigate to="/login" replace /> : (cryptoKey ? <Navigate to="/dashboard" replace /> : <UnlockVaultPage />)} 
+      />
 
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
-      <main className="pt-24 pb-20 sm:pb-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'add' && <AddEntry setActiveTab={setActiveTab} />}
-        {activeTab === 'backups' && <Backups />}
-        {activeTab === 'settings' && <Settings />}
-      </main>
-    </div>
+      {/* Protected Routes */}
+      <Route path="/" element={<ProtectedLayout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="add" element={<AddEntry />} />
+        <Route path="backups" element={<Backups />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }

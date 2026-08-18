@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuthVault } from '../context/AuthVaultContext';
 import { encryptData } from '../utils/crypto';
 import { PlusCircle, Wallet, Key, Layers, ShieldCheck, Wand2, Settings2, RefreshCw } from 'lucide-react';
 
-export function AddEntry({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
+export function AddEntry() {
   const { user, cryptoKey } = useAuthVault();
+  const navigate = useNavigate();
   
   const [label, setLabel] = useState('');
   const [chain, setChain] = useState('Ethereum');
@@ -84,7 +86,7 @@ export function AddEntry({ setActiveTab }: { setActiveTab: (tab: string) => void
       setPublicAddress('');
       setSecret('');
       setShowGenerator(false);
-      setActiveTab('dashboard');
+      navigate('/dashboard');
 
     } catch (err: any) {
       setError(err.message || "Failed to encrypt and save entry");
